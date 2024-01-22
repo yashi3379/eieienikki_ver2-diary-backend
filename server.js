@@ -107,3 +107,4 @@ app.get('/api/diary', async (req, res) => {
 app.listen(port, () => {
     console.log(`${port}番でサーバー起動中`);
 });
+

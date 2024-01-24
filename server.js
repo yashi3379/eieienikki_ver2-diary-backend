@@ -18,7 +18,7 @@ app.use(cors());
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride('_method'));
-//req.session.user = {};をしたい
+
 
 mongoose.connect('mongodb://localhost:27017/diary'
 )
@@ -54,7 +54,7 @@ passport.deserializeUser(User.deserializeUser());
 
 app.get('/api/check-session', (req, res) => {
     if (req.isAuthenticated()) {
-        res.json({ authenticated: true, user: req.user });
+        res.json({ authenticated: true});
     } else {
         res.json({ authenticated: false });
     }
@@ -78,9 +78,10 @@ app.post('/api/register', async (req, res) => {
 );
 
 //ユーザーログイン機能(React側からのリクエストを受け取る)
-app.post('/api/login', passport.authenticate('local'),async (req, res) => {
+app.post('/api/login',passport.authenticate('local'),async (req, res) => {
     res.status(200).json({ message: "ログイン成功", user: req.user });
 });
+
 
 //ログアウト機能(React側からのリクエストを受け取る)
 app.post('/api/logout', async (req, res) => {

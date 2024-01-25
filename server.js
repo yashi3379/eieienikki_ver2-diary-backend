@@ -14,7 +14,10 @@ const Diary = require('./models/diary');
 const app = express();
 const port = 3001;
 
-app.use(cors());
+app.use(cors({
+    origin: 'http://localhost:3000', // 例: 'http://localhost:3000'
+    credentials: true
+}));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(methodOverride('_method'));
@@ -33,7 +36,7 @@ const sessionConfig = {
     resave: false,
     saveUninitialized: true,
     cookie: {
-        httpOnly: true,
+        httpOnly: false,
         expires: Date.now() + 1000 * 60 * 60 * 24 * 7,
         maxAge: 1000 * 60 * 60 * 24 * 7
     }
@@ -54,7 +57,7 @@ passport.deserializeUser(User.deserializeUser());
 
 app.get('/api/check-session', (req, res) => {
     if (req.isAuthenticated()) {
-        res.json({ authenticated: true});
+        res.json({ authenticated: true, user: req.user });
     } else {
         res.json({ authenticated: false });
     }

@@ -3,6 +3,10 @@ const Schema = mongoose.Schema;
 
 
 const DiarySchema = new Schema({
+    title: {
+        type: String,
+        required: true
+    },
     content: {
         type: String,
         required: true
@@ -10,10 +14,11 @@ const DiarySchema = new Schema({
     date: {
         type: String,
     },
-    translate:{
-        type: String,
+    translate: {
+        title: String,
+        content: String
     },
-    image:{
+    image: {
         _id: String,
         cloudinaryURL: String
     },

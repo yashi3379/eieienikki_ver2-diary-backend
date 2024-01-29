@@ -1,3 +1,9 @@
+if (process.env.NODE_ENV !== "production") {
+    {
+        require('dotenv').config();
+    }
+}
+
 const express = require('express');
 const mongoose = require('mongoose');
 
@@ -6,9 +12,20 @@ const session = require('express-session');
 const passport = require('passport');
 const LocalStrategy = require('passport-local');
 const methodOverride = require('method-override');
+const OpenAI = require('openai');
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY});
+const deepl = require('deepl-node');
+const translator = new deepl.Translator(process.env.DEEPL_API_KEY);
+
+const cloudinary = require('./cloudinary');
+const { v4: uuidv4 } = require('uuid');
+
 
 const User = require('./models/user');
 const Diary = require('./models/diary');
+
+const ExpressError = require('./utils/ExpressError');
+const catchAsync = require('./utils/catchAsync');
 
 
 const app = express();
@@ -83,27 +100,93 @@ app.post('/api/register', async (req, res) => {
 //ユーザーログイン機能(React側からのリクエストを受け取る)
 app.post('/api/login',passport.authenticate('local'),async (req, res) => {
     res.status(200).json({ message: "ログイン成功", user: req.user });
+    
 });
 
 
 //ログアウト機能(React側からのリクエストを受け取る)
-app.post('/api/logout', async (req, res) => {
-    req.logout();
-    res.json({ message: "ログアウト成功" });
-});
+app.post('/api/logout', catchAsync(async (req, res) => {
+    req.logout(function (err) {
+        if (err) return res.status(500).json({ message: "ログアウトエラー" });
+        return res.status(200).json({ message: "ログアウト成功" });
+    })
+}));
 //Userに日記を追加する
-app.post('/api/diary', async (req, res) => {
-   
-});
-//日記をすべて取得する
-app.get('/api/diary', async (req, res) => {
+app.post('/api/createDiary', catchAsync(async (req, res) => {
+
+    const cloudinaryUpload = async (image) => {
+        const result = await cloudinary.uploader.upload(image, {
+            upload_preset: 'yeah-diary-ver2'
+        });
+        return result;
+    }
+    
+    //DeepLで英訳する
+    const translation = async (prompt) => {
+        const translationResult = await translator.translateText(prompt, 'ja', 'en-US');
+        const resultTransrate = translationResult.text;
+        return resultTransrate;
+    }
+    //OpenAIのDALL-3で画像を生成する
+    const generateImageURL = async (prompt) => {
+        const response = await openai.images.generate({ model: "dall-e-3", prompt, n: 1, size: "1792x1024" });
+        const generatedImageURL = response.data[0].url;
+        return generatedImageURL;
+    }
+    console.log(req);
+    //idからisAuthenticatedで認証されているか確認する
     if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "認証されていません" });
     }
+    if (!req.body) throw new ExpressError('無効な日記です', 400);
+    const diary = new Diary({
+        title: req.body.title,
+        content: req.body.content,
+        date: new Date().toLocaleString({ timeZone: 'Asia/Tokyo' }),
+    });
+    //diary.authorをreq.params.idに設定する
+    diary.author = req.body.userId;
+    //diary.contentを英訳する
+    const promptTitle = diary.title;
+    const promptContent = diary.content;
+    const resultTransrateTitle = await translation(promptTitle);
+    const resultTransrateContent = await translation(promptContent);
+    diary.translate.title = resultTransrateTitle;
+    diary.translate.content = resultTransrateContent;
+    //DALL-3でdiaryImageを生成して、urlだけを取得する
+    const DallEPrompt = `Illustrate an image that embodies the theme '${diary.translate.title}'. The composition should center around the narrative described in 
+    '${diary.translate.content}'.It should portray any key elements such as characters, emotions, actions, or symbolism mentioned in the diary. Reflect the overall mood suggested by the text,
+      ranging from tranquil and reflective to vibrant and dynamic. Pay attention to details that might hint at the setting or storyline, such as a specific color palette, 
+      lighting, and whether the scene is indoors or outdoors. Aim for a balance between literal depiction and artistic interpretation to engage the viewer's imagination.`;
 
-    const diaries = await Diary.find({ author: req.user._id });
-    res.json({ diaries });
-});
+    const aiImageURL = await generateImageURL(DallEPrompt);
+    //cloudinaryにアップロードする
+    const cloudinaryResult = await cloudinaryUpload(aiImageURL);
+    diary.image.cloudinaryURL = cloudinaryResult.secure_url;
+    //diary.image._idをuuidで生成する
+    diary.image._id = uuidv4();
+    if (diary.translate === undefined) {
+        throw new ExpressError('英訳に失敗しました', 400);
+    }
+    if (diary.image.cloudinaryURL === undefined) {
+        throw new ExpressError('画像生成またはアップロードに失敗しました', 400);
+    }
+    console.log(diary);
+    await diary.save();
+    res.status(200).json({ message: "日記を追加しました", diary: diary });
+   
+}));
+//日記をすべて取得する
+app.get('/api/getDiary', catchAsync(async (req, res) => {
+    
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "認証されていません" });
+    }
+    const userId = req.query.userId;
+    const diaries = await Diary.find({ author: userId });
+    res.status(200).json({ message: "日記を取得しました", diaries: diaries });
+
+}));
 
 
 

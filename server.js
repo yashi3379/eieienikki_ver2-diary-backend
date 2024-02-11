@@ -100,17 +100,35 @@ app.post('/api/register', async (req, res) => {
 //ユーザーログイン機能(React側からのリクエストを受け取る)
 app.post('/api/login',passport.authenticate('local'),async (req, res) => {
     res.status(200).json({ message: "ログイン成功", user: req.user });
-    
 });
 
 
 //ログアウト機能(React側からのリクエストを受け取る)
+// app.post('/api/logout', catchAsync(async (req, res) => {
+//     req.logout(function (err) {
+//         if (err) return res.status(500).json({ message: "ログアウトエラー" });
+//         return res.status(200).json({ message: "ログアウト成功" });
+//     })
+// }));
 app.post('/api/logout', catchAsync(async (req, res) => {
     req.logout(function (err) {
-        if (err) return res.status(500).json({ message: "ログアウトエラー" });
-        return res.status(200).json({ message: "ログアウト成功" });
-    })
+        if (err) { 
+            return res.status(500).json({ message: "ログアウトエラー" });
+        }
+        // ログアウトが成功した後、セッションを削除
+        req.session.destroy(function(err) {
+            if (err) {
+                return res.status(500).json({ message: "セッション削除エラー" });
+            }
+            // セッションを削除した後、クライアントに成功メッセージを送信
+            // クライアントサイドでセッションCookieを削除するために、
+            // 必要に応じてSet-Cookieヘッダーを使用してCookieをクリアする
+            res.clearCookie('connect.sid'); 
+            return res.status(200).json({ message: "ログアウト成功" });
+        });
+    });
 }));
+
 //Userに日記を追加する
 app.post('/api/createDiary', catchAsync(async (req, res) => {
 
@@ -133,7 +151,6 @@ app.post('/api/createDiary', catchAsync(async (req, res) => {
         const generatedImageURL = response.data[0].url;
         return generatedImageURL;
     }
-    console.log(req);
     //idからisAuthenticatedで認証されているか確認する
     if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "認証されていません" });
@@ -154,10 +171,10 @@ app.post('/api/createDiary', catchAsync(async (req, res) => {
     diary.translate.title = resultTransrateTitle;
     diary.translate.content = resultTransrateContent;
     //DALL-3でdiaryImageを生成して、urlだけを取得する
-    const DallEPrompt = `Illustrate an image that embodies the theme '${diary.translate.title}'. The composition should center around the narrative described in 
-    '${diary.translate.content}'.It should portray any key elements such as characters, emotions, actions, or symbolism mentioned in the diary. Reflect the overall mood suggested by the text,
-      ranging from tranquil and reflective to vibrant and dynamic. Pay attention to details that might hint at the setting or storyline, such as a specific color palette, 
-      lighting, and whether the scene is indoors or outdoors. Aim for a balance between literal depiction and artistic interpretation to engage the viewer's imagination.`;
+    const DallEPrompt = `Illustrate '${diary.translate.title}' with 
+    elements from '${diary.translate.content}'. Emphasize mood, key actions,
+     and symbols using appropriate colors and light. `
+    ;
 
     const aiImageURL = await generateImageURL(DallEPrompt);
     //cloudinaryにアップロードする

@@ -103,13 +103,7 @@ app.post('/api/login',passport.authenticate('local'),async (req, res) => {
 });
 
 
-//ログアウト機能(React側からのリクエストを受け取る)
-// app.post('/api/logout', catchAsync(async (req, res) => {
-//     req.logout(function (err) {
-//         if (err) return res.status(500).json({ message: "ログアウトエラー" });
-//         return res.status(200).json({ message: "ログアウト成功" });
-//     })
-// }));
+
 app.post('/api/logout', catchAsync(async (req, res) => {
     req.logout(function (err) {
         if (err) { 
@@ -202,6 +196,20 @@ app.get('/api/getDiary', catchAsync(async (req, res) => {
     const userId = req.query.userId;
     const diaries = await Diary.find({ author: userId });
     res.status(200).json({ message: "日記を取得しました", diaries: diaries });
+
+}));
+
+//日記個別を取得する
+app.get('/api/getDiary/:id', catchAsync(async (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "認証されていません" });
+    }
+    const diary = await Diary.findById(req.params.id);
+    if (!diary) {
+        return res.status(404).json({ message: "指定されたIDの日記が見つかりません" });
+      }
+    console.log(diary);
+    res.status(200).json({ message: "日記を取得しました", diary: diary });
 
 }));
 

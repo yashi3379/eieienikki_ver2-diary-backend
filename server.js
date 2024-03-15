@@ -13,7 +13,7 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local');
 const methodOverride = require('method-override');
 const OpenAI = require('openai');
-const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY});
+const openai = new OpenAI({ apiKey: process.env.OPENAI_API_KEY });
 const deepl = require('deepl-node');
 const translator = new deepl.Translator(process.env.DEEPL_API_KEY);
 
@@ -98,7 +98,7 @@ app.post('/api/register', async (req, res) => {
 );
 
 //ユーザーログイン機能(React側からのリクエストを受け取る)
-app.post('/api/login',passport.authenticate('local'),async (req, res) => {
+app.post('/api/login', passport.authenticate('local'), async (req, res) => {
     res.status(200).json({ message: "ログイン成功", user: req.user });
 });
 
@@ -106,18 +106,18 @@ app.post('/api/login',passport.authenticate('local'),async (req, res) => {
 
 app.post('/api/logout', catchAsync(async (req, res) => {
     req.logout(function (err) {
-        if (err) { 
+        if (err) {
             return res.status(500).json({ message: "ログアウトエラー" });
         }
         // ログアウトが成功した後、セッションを削除
-        req.session.destroy(function(err) {
+        req.session.destroy(function (err) {
             if (err) {
                 return res.status(500).json({ message: "セッション削除エラー" });
             }
             // セッションを削除した後、クライアントに成功メッセージを送信
             // クライアントサイドでセッションCookieを削除するために、
             // 必要に応じてSet-Cookieヘッダーを使用してCookieをクリアする
-            res.clearCookie('connect.sid'); 
+            res.clearCookie('connect.sid');
             return res.status(200).json({ message: "ログアウト成功" });
         });
     });
@@ -132,7 +132,7 @@ app.post('/api/createDiary', catchAsync(async (req, res) => {
         });
         return result;
     }
-    
+
     //DeepLで英訳する
     const translation = async (prompt) => {
         const translationResult = await translator.translateText(prompt, 'ja', 'en-US');
@@ -168,7 +168,7 @@ app.post('/api/createDiary', catchAsync(async (req, res) => {
     const DallEPrompt = `Illustrate '${diary.translate.title}' with 
     elements from '${diary.translate.content}'. Emphasize mood, key actions,
      and symbols using appropriate colors and light. `
-    ;
+        ;
 
     const aiImageURL = await generateImageURL(DallEPrompt);
     //cloudinaryにアップロードする
@@ -182,14 +182,13 @@ app.post('/api/createDiary', catchAsync(async (req, res) => {
     if (diary.image.cloudinaryURL === undefined) {
         throw new ExpressError('画像生成またはアップロードに失敗しました', 400);
     }
-    console.log(diary);
     await diary.save();
     res.status(200).json({ message: "日記を追加しました", diary: diary });
-   
+
 }));
 //日記をすべて取得する
 app.get('/api/getDiary', catchAsync(async (req, res) => {
-    
+
     if (!req.isAuthenticated()) {
         return res.status(401).json({ message: "認証されていません" });
     }
@@ -207,10 +206,33 @@ app.get('/api/getDiary/:id', catchAsync(async (req, res) => {
     const diary = await Diary.findById(req.params.id);
     if (!diary) {
         return res.status(404).json({ message: "指定されたIDの日記が見つかりません" });
-      }
-    console.log(diary);
+    }
     res.status(200).json({ message: "日記を取得しました", diary: diary });
 
+}));
+
+//日記を削除する
+app.delete('/api/deleteDiary/:id', catchAsync(async (req, res) => {
+    if (!req.isAuthenticated()) {
+        return res.status(401).json({ message: "認証されていません" });
+    }
+    const { id } = req.params;
+    const diary = await Diary.findById(id);
+    if (!diary) {
+        return res.status(404).json({ message: "指定されたIDの日記が見つかりません" });
+    }
+    const cloudinaryDelete = async (imageId) => {
+        const result = await cloudinary.uploader.destroy(imageId);
+        return result;
+    }
+    try {
+        const cloudinaryId = diary.image._id;
+        await cloudinaryDelete(cloudinaryId);
+        await Diary.findByIdAndDelete(id);
+        res.status(200).json({ message: "日記を削除しました" });
+    } catch (e) {
+        return res.status(404).json({ message: "エラーが発生しました" });
+    }
 }));
 
 
